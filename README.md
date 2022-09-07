@@ -16,6 +16,6 @@ Don't pipe stuff to bash without reading it first!
 #### What does it do?
 1) Installs `git` if not already installed
 2) Installs `build-essential` if not already installed
-3) Clones the [hashcat repo]() to `/tmp/hashcat_install/`
+3) Clones the [hashcat repo](https://github.com/hashcat/hashcat) to `/tmp/hashcat_install/`
 4) Runs `make` and `make install`
 5) Deletes the temporary folder
