@@ -1,9 +1,17 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 
 # Check if root
 if [ "$EUID" -ne 0 ]
   then echo "Please run as root!"
   exit
+fi
+
+# Prompt user
+read -p "Download rules and wordlists too? (y/N))" -n 1 -r
+echo    # (optional) move to a new line
+if [[ $REPLY =~ ^[Yy]$ ]]
+then
+    get_resources=True
 fi
 
 # Install git if not installed
@@ -12,8 +20,8 @@ if ! dpkg -s git >/dev/null 2>&1
 then
     printf ' [NO]\n'
     echo "Installing 'git'..."
-    apt update >/dev/null
-    if apt -y install git
+    apt-get update >/dev/null
+    if apt-get -y install git
     then
         echo "'git' successfully installed"
     else
@@ -30,8 +38,8 @@ if ! dpkg -s build-essential >/dev/null 2>&1
 then
     printf ' [NO]\n'
     echo "Installing 'build-essential'..."
-    apt update >/dev/null 2>&1
-    if apt -y install build-essential
+    apt-get update >/dev/null 2>&1
+    if apt-get -y install build-essential
     then
         echo "'build-essential' installed"
     else
@@ -42,10 +50,9 @@ else
     printf ' [YES]\n'
 fi
 
-cd /tmp
-mkdir hashcat_install
-cd hashcat_install
-
+# Install hashcat
+mkdir installhashcat
+cd installhashcat
 
 echo "Cloning 'hashcat' repository..."
 if ! git clone https://github.com/hashcat/hashcat.git >/dev/null
@@ -56,20 +63,160 @@ fi
 cpu_count=$(nproc)
 echo "Building 'hashcat' with $cpu_count cores..."
 cd hashcat
-if ! make -j$cpu_count >/dev/null
+if ! make -j$cpu_count
 then
     echo "Could not build 'hashcat'!"
-    rm -rf /tmp/hashcat_install
     exit
 fi
 
-if ! make install >/dev/null
+echo "Installing 'hashcat'..."
+if ! make install
 then
     echo "Could not install 'hashcat'!"
-    rm -rf /tmp/hashcat_install
     exit
 fi
 
-echo "Cleaning up..."
-rm -rf /tmp/hashcat_install
+
+
+if ! [ "$get_resources" = true ]
+then
+    echo "Done!"
+    exit
+fi
+
+
+cd ..
+if ! git clone https://github.com/n0kovo/hashcat-rules-collection.git >/dev/null
+then
+    echo "Could not clone 'hashcat-rules-collection' repository!"
+    exit
+fi
+
+
+# Install aria2
+printf "'aria2' installed?"
+if ! dpkg -s aria2 >/dev/null 2>&1
+then
+    printf ' [NO]\n'
+    echo "Installing 'aria2'..."
+    apt-get update >/dev/null
+    if apt-get -y install aria2
+    then
+        echo "'aria2' successfully installed"
+    else
+        echo "Failed to install 'aria2'!"
+        exit
+    fi
+else
+    printf ' [YES]\n'
+fi
+
+
+# Install p7zip-full
+printf "'p7zip-full' installed?"
+if ! dpkg -s p7zip-full >/dev/null 2>&1
+then
+    printf ' [NO]\n'
+    echo "Installing 'p7zip-full'..."
+    apt-get update >/dev/null
+    if apt-get -y install p7zip-full
+    then
+        echo "'p7zip-full' successfully installed"
+    else
+        echo "Failed to install 'p7zip-full'!"
+        exit
+    fi
+else
+    printf ' [YES]\n'
+fi
+
+# Install jq
+printf "'jq' installed?"
+if ! dpkg -s p7zip-full >/dev/null 2>&1
+then
+    printf ' [NO]\n'
+    echo "Installing 'jq'..."
+    apt-get update >/dev/null
+    if apt-get -y install jq
+    then
+        echo "'jq' successfully installed"
+    else
+        echo "Failed to install 'jq'!"
+        exit
+    fi
+else
+    printf ' [YES]\n'
+fi
+
+choices=()
+file_file_name_list=()
+
+json=$(curl 'https://hashmob.net/api/v2/downloads/research/official' \
+-H 'accept: */*' \
+-H 'content-type: application/json') >/dev/null
+
+# read each item in the JSON array to an item in the Bash array
+readarray -t wordlists < <(echo $json | jq -c '.[]')
+
+ITER=0
+# iterate through the Bash array
+for item in "${wordlists[@]}"; do
+    ((ITER++))
+    name=$(jq -c -r '.name' <<< "$item")
+    file_name=$(jq -c -r '.file_name' <<< "$item")
+    publish_date=$(jq -c -r '.publish_date' <<< "$item")
+    size=$(jq -c -r '.file_size' <<< "$item")
+    size=$(echo $size | numfmt --to iec --format "%8.2f")
+    size_decomp=$(jq -c -r '.file_size_unzipped' <<< "$item")
+    size_decomp=$(echo $size_decomp | numfmt --to iec --format "%8.2f")
+    choice_string=$(printf "%-24s%-1s|%-3s%-2s|%-2s decomp.%1s|%-5s\n"      "$name" " " "$size" "  " "$size_decomp" "" "  $publish_date")
+    choice_string=$(echo "$(printf "$choice_string")")
+    choices+=("$choice_string")
+    file_name_list+=("$file_name")
+done
+
+echo "======================================================================="
+echo "Select wordlists to download (max 5) "
+echo "======================================================================="
+old_columns=$COLUMNS
+COLUMNS=71
+select dummy in "${choices[@]}"; do  # present numbered choices to user
+COLUMNS=$old_columns
+# Parse ,-separated numbers entered into an array.
+# Variable $REPLY contains whatever the user entered.
+IFS=', ' read -ra selChoices <<<"$REPLY"
+# Loop over all numbers entered.
+for choice in "${selChoices[@]}"; do
+    # Validate the number entered.
+    (( ${#selChoices[@]} <= 5)) || { echo "Maximum 5! Try again." >&2; continue 2; }
+    (( choice >= 1 && choice <= ${#choices[@]} )) || { echo "Invalid choice: $choice. Try again." >&2; continue 2; }
+    # If valid, echo the choice and its number.
+    prefix="https://hashmob.net/api/v2/downloads/research/official/"
+    echo "$prefix${file_name_list[choice-1]}" >> /tmp/wordlist_urls.txt
+done
+# All choices are valid, exit the prompt.
+break
+done
+
+echo "Downloading wordlists..."
+mkdir wordlists
+cd wordlists
+aria2c --input-file=/tmp/wordlist_urls.txt
+
+echo "Download complete"
+echo "Extracting archives..."
+if ! 7z x *.7z
+then
+    echo "Could not extract wordlist archives"
+    exit
+fi
+
+echo "Wordlists extracted"
+echo "Deleting wordlist archives"
+if ! rm -rf hashmob*.7z
+then
+    echo "Could not delete wordlist archives"
+    exit
+fi
+
 echo "Done."
