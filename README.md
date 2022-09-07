@@ -1,5 +1,5 @@
 # n0kovo.github.io/installhashcat/
-A quick bash script to build and install the latest dev version of hashcat on Debian based distros
+A quick bash script to build and install the latest dev version of hashcat on Debian based distros, hosted as a GitHub Page for easy access.
 
 #### Requirements:
 - `apt`
