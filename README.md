@@ -1,5 +1,5 @@
 # n0kovo.github.io/installhashcat/
-A quick bash script to build and install the latest dev version of hashcat on Debian based distros, hosted as a GitHub Page for easy access. Made for myself to use on EC2 boxes and to learn some bash.
+A quick bash script to build and install the latest dev version of hashcat on Debian based distros and optionally download a [collection of hashcat rules](https://github.com/n0kovo/hashcat-rules-collection) and wordlists, hosted as a GitHub Page for easy access. Made for myself to use on EC2 boxes and to learn some bash.
 
 #### Requirements:
 - `apt`
@@ -20,7 +20,7 @@ Don't pipe stuff to bash without reading it first!
 4) Runs `make` and `make install`
 5) If chosen when prompted:
     1) Clones [hashcat-rules-collection](https://github.com/n0kovo/hashcat-rules-collection)
-    2) Checks hashmob.net API for list of wordlists
+    2) Checks hashmob.net API for list of latest wordlists
     3) Asks user to select max 5 wordlists
     4) Installs `aria2` if not already installed
     5) Installs `p7zip-full` if not already installed
